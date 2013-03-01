@@ -7,7 +7,8 @@
                  [com.cemerick/friend "0.1.3"]
                  [hiccup "1.0.2"]
                  [props3t "0.0.4-SNAPSHOT"]
-                 [compojure "1.1.5"]]
+                 [compojure "1.1.5"]
+                 [org.clojure/data.codec "0.1.0"]]
   :profiles {:dev {:dependencies [[ring "1.1.1"]
                                   [clj-http "0.5.5"]
                                   [cheshire "5.0.2"]]}}
