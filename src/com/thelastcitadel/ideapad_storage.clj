@@ -4,15 +4,14 @@
             [cemerick.friend.credentials :as creds]
             [compojure.core :refer [GET ANY POST defroutes]]
             [compojure.handler :refer [site]]
-            [clojure.data.codec.base64 :refer [encode]])
+            [clojure.data.codec.base64 :refer [encode]]
+            [propS3t.core :as s3])
   (:import (java.util UUID)
            (java.security MessageDigest)))
 
 (def users {"root" {:username "root"
                     :password (creds/hash-bcrypt "password")
                     :roles #{::authenticated}}})
-
-(def storage (atom {}))
 
 (defn sha256 [seed]
   (let [md (MessageDigest/getInstance "SHA-256")]
@@ -24,20 +23,36 @@
     (recur (subs string 0 (dec (count string))))
     string))
 
+(defn read-creds []
+  (read-string (slurp (System/getProperty "s3.creds"))))
+
 (defn store [{:keys [body]}]
   (let [x (slurp body)
         id (trim= (.replaceAll (.replaceAll (String. (encode (sha256 x)) "utf8") "-" "_")
-                               "/" "+"))]
-    (swap! storage assoc id x)
+                               "/" "+"))
+        {secret-key :secrect.key
+         key :key
+         bucket :bucket
+         prefix :prefix} (read-creds)]
+    (s3/write-stream {:aws-key key
+                      :aws-secret-key secret-key}
+                     bucket
+                     (str prefix "/" id)
+                     (java.io.ByteArrayInputStream. (.getBytes x))
+                     :length (count (.getBytes x)))
     {:body id}))
 
 (alter-var-root #'store friend/wrap-authorize #{::authenticated})
 
 (defn retrieve [{{:keys [id]} :params :as m}]
-  (if (contains? @storage id)
-    {:body (get @storage id)}
-    {:status 404
-     :body ""}))
+  (let [{secret-key :secrect.key
+         key :key
+         bucket :bucket
+         prefix :prefix} (read-creds)]
+    {:body (s3/read-stream {:aws-key key
+                            :aws-secret-key secret-key}
+                           bucket
+                           (str prefix "/" id))}))
 
 (alter-var-root #'retrieve friend/wrap-authorize #{::authenticated})
 
